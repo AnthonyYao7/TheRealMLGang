@@ -3,9 +3,13 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import urllib.parse
+
 import pandas as pd
 import time
+import threading
+
+from typing import List
+
 
 base_search_url = "https://www.youtube.com/results?search_query={}"
 
@@ -36,45 +40,50 @@ def get_video_link(artist_name: str, video_name: str) -> str:
         )
         driver.execute_script("arguments[0].click();", first_video)
         ret = driver.current_url
+    except:
+        return
     finally:
         driver.quit()
-    # first_link_xpath = '/html/body/ytd-app/div[1]/ytd-page-manager/ytd-search/div[1]/ytd-two-column-search-results-renderer/div/ytd-section-list-renderer/div[2]/ytd-item-section-renderer/div[3]/ytd-video-renderer[1]/div[1]/div/div[1]/div/h3/a/yt-formatted-string'
-    # first_video = driver.find_element('xpath', first_link_xpath)
+
     return ret
 
 
+def get_video_link_threaded(artist_name: str, video_name: str, track_id: str) -> None:
+    link = get_video_link(artist_name, video_name)
+    if link is None:
+        return
+
+    lock = threading.Lock()
+    lock.acquire()
+
+    with open("links.txt", "a") as f:
+        f.write(",".join([track_id, '"' + artist_name.replace('"', '') + '"', '"' + video_name.replace('"', '') + '"', link]) + "\n")
+    lock.release()
+
+
+def do_subset(entry_list: List) -> None:
+    for entry in entry_list:
+        get_video_link_threaded(entry[0], entry[1], entry[2])
+
 
 def main():
-    df = pd.read_csv("dataset.csv")
-    artist_trackname = df[['artists', 'track_name', 'popularity']].copy()
+    df = pd.read_csv("../Alan/cleaned_data.csv")
 
-    artist_trackname.sort_values(by=['popularity'], inplace=True, ascending=False)
-    artist_trackname.drop_duplicates(subset="track_name", keep="first", inplace=True)
+    artists = list(df['artists'])
+    track_name = list(df['track_name'])
+    track_id = list(df['track_id'])
 
-    artists = list(artist_trackname['artists'])
-    track_name = list(artist_trackname['track_name'])
+    a_tn = list(zip(artists, track_name, track_id))
 
-    youtube_urls = []
-    done = 453
-    count = done
-    for artist, track in zip(artists, track_name):
-        if done > 0:
-            done -= 1
-            continue
-        if count == 10000:
-            break
-        youtube_urls.append(get_video_link(artist, track))
-        if youtube_urls[-1] is None:
-            youtube_urls.pop(-1)
-            continue
-        print(youtube_urls[-1])
-        with open("links.txt", "a") as f:
-            f.write(youtube_urls[-1] + "\n")
-        count += 1
+    threads = []
 
-    artist_trackname['yt_links'] = youtube_urls
+    for i in range(20):
+        thread = threading.Thread(target=do_subset, args=(a_tn[i * 500: (i + 1) * 500],))
+        thread.start()
+        threads.append(thread)
 
-    artist_trackname.to_csv("with_links.csv")
+    for thread in threads:
+        thread.join()
 
 
 if __name__ == "__main__":

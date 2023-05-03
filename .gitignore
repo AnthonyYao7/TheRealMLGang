@@ -1,8 +1,12 @@
 *
-!.gitignore
 !Anthony/
 !Anthony/get_all_video_links.py
 !Anthony/links.txt
+!Anthony/download_videos.py
+!Anthony/generate_spectorgrams.py
+!Anthony/build_dataset.py
+!Anthony/generate_spectrograms_child.py
+!Anthony/build_dataset.ipynb
 !Alex/
 !Alex/placeholder.txt
 !Maya/
